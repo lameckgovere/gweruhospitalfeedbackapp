@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deep Trends - Gweru District Feedback App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body class="bg-gray-100 p-4">
+    <div class="max-w-6xl mx-auto bg-white p-6 rounded-xl shadow-lg">
+        <h2 class="text-2xl font-bold text-indigo-600 mb-4 flex items-center">
+            <i class="fas fa-chart-line mr-2"></i> Deep Analysis Trends – {{ year }}
+        </h2>
+
+        <form method="get" class="mb-6 bg-gray-50 p-3 rounded-lg flex items-center gap-2">
+            <label for="year" class="text-sm font-medium">Select Year:</label>
+            <select name="year" id="year" class="border rounded p-2 text-sm" onchange="this.form.submit()">
+                {% for y in range(2022, now.year+5) %}
+                <option value="{{ y }}" {% if y==year %}selected{% endif %}>{{ y }}</option>
+                {% endfor %}
+            </select>
+        </form>
+
+        <!-- All charts with fixed-height wrapper (h-20) -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="bg-white p-4 rounded-lg shadow border">
+                <h3 class="text-sm font-semibold mb-1">Complaint Resolution Rate</h3>
+                <div class="h-20">
+                    <canvas id="complaintChart" class="w-full h-full"></canvas>
+                </div>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow border">
+                <h3 class="text-sm font-semibold mb-1">Suggestion Implementation Rate</h3>
+                <div class="h-20">
+                    <canvas id="suggestionChart" class="w-full h-full"></canvas>
+                </div>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow border">
+                <h3 class="text-sm font-semibold mb-1">Compliment Maintenance vs Deviation</h3>
+                <div class="h-20">
+                    <canvas id="complimentChart" class="w-full h-full"></canvas>
+                </div>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow border">
+                <h3 class="text-sm font-semibold mb-1">Mechanism Performance by Month</h3>
+                <div class="h-20">
+                    <canvas id="mechanismChart" class="w-full h-full"></canvas>
+                </div>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow border">
+                <h3 class="text-sm font-semibold mb-1">Urgent Suggestion Success Rate</h3>
+                <div class="h-20">
+                    <canvas id="urgentSuggestionChart" class="w-full h-full"></canvas>
+                </div>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow border">
+                <h3 class="text-sm font-semibold mb-1">Urgent Complaint Resolution Rate</h3>
+                <div class="h-20">
+                    <canvas id="urgentComplaintChart" class="w-full h-full"></canvas>
+                </div>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow border">
+                <h3 class="text-sm font-semibold mb-1">Action Time (≤48h vs >48h)</h3>
+                <div class="h-20">
+                    <canvas id="actionTimeChart" class="w-full h-full"></canvas>
+                </div>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow border">
+                <h3 class="text-sm font-semibold mb-1">Carried‑Over Complaints</h3>
+                <div class="h-20">
+                    <canvas id="carriedOverChart" class="w-full h-full"></canvas>
+                </div>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow border">
+                <h3 class="text-sm font-semibold mb-1">Referral Counts</h3>
+                <div class="h-20">
+                    <canvas id="referralChart" class="w-full h-full"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Total Feedback Table -->
+        <div class="mt-6 bg-white p-4 rounded-lg shadow border">
+            <h3 class="text-md font-semibold mb-2">Total Feedback by Month</h3>
+            <table class="w-full text-sm border">
+                <thead class="bg-gray-100">
+                    <tr><th class="p-2 border">Month</th><th class="p-2 border">Total</th></tr>
+                </thead>
+                <tbody>
+                    {% for m in range(1,13) %}
+                    <tr><td class="p-2 border">{{ ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][m-1] }}</td>
+                        <td class="p-2 border">{{ max(0, feedback_total_by_month[m]) }}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="mt-4">
+            <a href="/staff" class="text-gray-600 hover:text-gray-800 text-sm flex items-center">
+                <i class="fas fa-arrow-left mr-1"></i> Back to Dashboard
+            </a>
+        </div>
+    </div>
+
+    <script>
+        const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+        // Complaint resolution rate
+        new Chart(document.getElementById('complaintChart'), {
+            type: 'line',
+            data: {
+                labels: months,
+                datasets: [{
+                    label: "Resolution Rate (%)",
+                    data: [{% for m in range(1,13) %}{{ max(0, (complaint_by_month[m]["resolved"]/complaint_by_month[m]["total"]*100) if complaint_by_month[m]["total"] else 0) }},{% endfor %}],
+                    borderColor: "#4F46E5",
+                    backgroundColor: "rgba(79,70,229,0.1)",
+                    tension: 0.1,
+                    fill: true,
+                    pointRadius: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: { y: { beginAtZero: true, max: 100, ticks: { font: { size: 8 } } } },
+                plugins: { legend: { display: false } }
+            }
+        });
+
+        // Suggestion implementation rate
+        new Chart(document.getElementById('suggestionChart'), {
+            type: 'line',
+            data: {
+                labels: months,
+                datasets: [{
+                    label: "Implementation Rate (%)",
+                    data: [{% for m in range(1,13) %}{{ max(0, (suggestion_by_month[m]["implemented"]/suggestion_by_month[m]["total"]*100) if suggestion_by_month[m]["total"] else 0) }},{% endfor %}],
+                    borderColor: "#059669",
+                    backgroundColor: "rgba(5,150,105,0.1)",
+                    tension: 0.1,
+                    fill: true,
+                    pointRadius: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: { y: { beginAtZero: true, max: 100, ticks: { font: { size: 8 } } } },
+                plugins: { legend: { display: false } }
+            }
+        });
+
+        // Compliment chart
+        new Chart(document.getElementById('complimentChart'), {
+            type: 'bar',
+            data: {
+                labels: months,
+                datasets: [
+                    { label: "Maintained", data: [{% for m in range(1,13) %}{{ compliment_by_month[m]["maintained"] }},{% endfor %}], backgroundColor: "#10B981", barPercentage: 0.6 },
+                    { label: "Deviated", data: [{% for m in range(1,13) %}{{ compliment_by_month[m]["deviated"] }},{% endfor %}], backgroundColor: "#F87171", barPercentage: 0.6 }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: { y: { beginAtZero: true, ticks: { font: { size: 8 } } } },
+                plugins: { legend: { position: 'top', labels: { font: { size: 8 } } } }
+            }
+        });
+
+        // Mechanism chart (stacked)
+        const mechanisms = new Set();
+        {% for m in range(1,13) %}{% for mech in mechanism_by_month[m].keys() %}mechanisms.add("{{ mech }}");{% endfor %}{% endfor %}
+        const mechList = Array.from(mechanisms);
+        const mechColors = ["#60A5FA","#FBBF24","#34D399","#F87171","#A78BFA","#F472B6"];
+        const mechDatasets = mechList.map((mech, idx) => ({
+            label: mech,
+            data: [{% for m in range(1,13) %}{{ mechanism_by_month[m].get(mech, 0) }},{% endfor %}],
+            backgroundColor: mechColors[idx % mechColors.length],
+            barPercentage: 0.6
+        }));
+        new Chart(document.getElementById('mechanismChart'), {
+            type: 'bar',
+            data: { labels: months, datasets: mechDatasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: { y: { beginAtZero: true, stacked: true, ticks: { font: { size: 8 } } } },
+                plugins: { legend: { position: 'top', labels: { font: { size: 8 } } } }
+            }
+        });
+
+        // Urgent suggestion success rate
+        new Chart(document.getElementById('urgentSuggestionChart'), {
+            type: 'line',
+            data: {
+                labels: months,
+                datasets: [{
+                    label: "Success Rate (%)",
+                    data: [{% for m in range(1,13) %}{{ max(0, (urgent_suggestion_by_month[m]["implemented"]/urgent_suggestion_by_month[m]["urgent"]*100) if urgent_suggestion_by_month[m]["urgent"] else 0) }},{% endfor %}],
+                    borderColor: "#EAB308",
+                    backgroundColor: "rgba(234,179,8,0.1)",
+                    tension: 0.1,
+                    fill: true,
+                    pointRadius: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: { y: { beginAtZero: true, max: 100, ticks: { font: { size: 8 } } } },
+                plugins: { legend: { display: false } }
+            }
+        });
+
+        // Urgent complaint resolution rate
+        new Chart(document.getElementById('urgentComplaintChart'), {
+            type: 'line',
+            data: {
+                labels: months,
+                datasets: [{
+                    label: "Resolution Rate (%)",
+                    data: [{% for m in range(1,13) %}{{ max(0, (urgent_complaint_by_month[m]["resolved"]/urgent_complaint_by_month[m]["urgent"]*100) if urgent_complaint_by_month[m]["urgent"] else 0) }},{% endfor %}],
+                    borderColor: "#F97316",
+                    backgroundColor: "rgba(249,115,22,0.1)",
+                    tension: 0.1,
+                    fill: true,
+                    pointRadius: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: { y: { beginAtZero: true, max: 100, ticks: { font: { size: 8 } } } },
+                plugins: { legend: { display: false } }
+            }
+        });
+
+        // Action time trends
+        new Chart(document.getElementById('actionTimeChart'), {
+            type: 'line',
+            data: {
+                labels: months,
+                datasets: [
+                    { label: '≤48h', data: [{% for m in range(1,13) %}{{ action_within_48h_by_month[m] }},{% endfor %}], borderColor: '#10B981', backgroundColor: 'rgba(16,185,129,0.1)', tension: 0.1, fill: false, pointRadius: 1 },
+                    { label: '>48h', data: [{% for m in range(1,13) %}{{ action_over_48h_by_month[m] }},{% endfor %}], borderColor: '#EF4444', backgroundColor: 'rgba(239,68,68,0.1)', tension: 0.1, fill: false, pointRadius: 1 }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: { y: { beginAtZero: true, ticks: { font: { size: 8 } } } },
+                plugins: { legend: { position: 'top', labels: { font: { size: 8 } } } }
+            }
+        });
+
+        // Carried-over complaints
+        new Chart(document.getElementById('carriedOverChart'), {
+            type: 'bar',
+            data: {
+                labels: months,
+                datasets: [{
+                    label: 'Carried Over',
+                    data: [{% for m in range(1,13) %}{{ carried_over_by_month[m] }},{% endfor %}],
+                    backgroundColor: '#8B5CF6',
+                    barPercentage: 0.6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: { y: { beginAtZero: true, ticks: { font: { size: 8 } } } },
+                plugins: { legend: { display: false } }
+            }
+        });
+
+        // Referral counts
+        new Chart(document.getElementById('referralChart'), {
+            type: 'bar',
+            data: {
+                labels: months,
+                datasets: [{
+                    label: 'Referred',
+                    data: [{% for m in range(1,13) %}{{ referral_by_month[m] }},{% endfor %}],
+                    backgroundColor: '#3B82F6',
+                    barPercentage: 0.6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: { y: { beginAtZero: true, ticks: { font: { size: 8 } } } },
+                plugins: { legend: { display: false } }
+            }
+        });
+    </script>
+</body>
+</html>

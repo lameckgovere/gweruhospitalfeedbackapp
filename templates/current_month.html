@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Current Month Report - Gweru District Feedback App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body class="bg-gray-100 p-4">
+    <div class="max-w-7xl mx-auto bg-white p-6 rounded-xl shadow-lg">
+        <h2 class="text-2xl font-bold text-indigo-600 mb-2 flex items-center">
+            <i class="fas fa-calendar-alt mr-2"></i> Current Month Report
+        </h2>
+        <p class="text-gray-600 mb-6">{{ now.strftime('%B %Y') }}</p>
+
+        <!-- KPI Cards (unchanged) -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div class="bg-blue-50 p-4 rounded-lg shadow text-center border-l-4 border-blue-500">
+                <p class="text-sm text-gray-600">Total Feedback</p>
+                <h3 class="text-3xl font-bold text-blue-700">{{ total }}</h3>
+            </div>
+            <div class="bg-green-50 p-4 rounded-lg shadow text-center border-l-4 border-green-500">
+                <p class="text-sm text-gray-600">Complaints</p>
+                <h3 class="text-3xl font-bold text-green-700">{{ complaints }}</h3>
+            </div>
+            <div class="bg-yellow-50 p-4 rounded-lg shadow text-center border-l-4 border-yellow-500">
+                <p class="text-sm text-gray-600">Suggestions</p>
+                <h3 class="text-3xl font-bold text-yellow-700">{{ suggestions }}</h3>
+            </div>
+            <div class="bg-pink-50 p-4 rounded-lg shadow text-center border-l-4 border-pink-500">
+                <p class="text-sm text-gray-600">Compliments</p>
+                <h3 class="text-3xl font-bold text-pink-700">{{ compliments }}</h3>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div class="bg-orange-50 p-4 rounded-lg shadow text-center border-l-4 border-orange-500">
+                <p class="text-sm text-gray-600">Urgent Suggestions</p>
+                <h3 class="text-3xl font-bold text-orange-700">{{ urgent_suggestions }}</h3>
+            </div>
+            <div class="bg-red-50 p-4 rounded-lg shadow text-center border-l-4 border-red-500">
+                <p class="text-sm text-gray-600">Urgent Complaints</p>
+                <h3 class="text-3xl font-bold text-red-700">{{ urgent_complaints }}</h3>
+            </div>
+            <div class="bg-teal-50 p-4 rounded-lg shadow text-center border-l-4 border-teal-500">
+                <p class="text-sm text-gray-600">Action ≤48h</p>
+                <h3 class="text-3xl font-bold text-teal-700">{{ action_within_48h }}</h3>
+            </div>
+            <div class="bg-purple-50 p-4 rounded-lg shadow text-center border-l-4 border-purple-500">
+                <p class="text-sm text-gray-600">Action >48h</p>
+                <h3 class="text-3xl font-bold text-purple-700">{{ action_over_48h }}</h3>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div class="bg-emerald-50 p-4 rounded-lg shadow text-center border-l-4 border-emerald-500">
+                <p class="text-sm text-gray-600">Resolved</p>
+                <h3 class="text-3xl font-bold text-emerald-700">{{ resolved }}</h3>
+            </div>
+            <div class="bg-amber-50 p-4 rounded-lg shadow text-center border-l-4 border-amber-500">
+                <p class="text-sm text-gray-600">Referred</p>
+                <h3 class="text-3xl font-bold text-amber-700">{{ referred }}</h3>
+            </div>
+            <div class="bg-gray-50 p-4 rounded-lg shadow text-center border-l-4 border-gray-500">
+                <p class="text-sm text-gray-600">Pending</p>
+                <h3 class="text-3xl font-bold text-gray-700">{{ pending }}</h3>
+            </div>
+            <div class="bg-indigo-50 p-4 rounded-lg shadow text-center border-l-4 border-indigo-500">
+                <p class="text-sm text-gray-600">Carried Over</p>
+                <h3 class="text-3xl font-bold text-indigo-700">{{ carried_over }}</h3>
+            </div>
+        </div>
+
+        <!-- Charts Section with fixed-height wrapper (h-20 = 80px) -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <div class="bg-white p-4 rounded-lg shadow border">
+                <h3 class="text-md font-semibold mb-2 flex items-center">
+                    <i class="fas fa-clock text-indigo-500 mr-2"></i> Complaint Resolution Time
+                </h3>
+                <div class="h-20">
+                    <canvas id="resolutionChart" class="w-full h-full"></canvas>
+                </div>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow border">
+                <h3 class="text-md font-semibold mb-2 flex items-center">
+                    <i class="fas fa-chart-pie text-indigo-500 mr-2"></i> Feedback by Category
+                </h3>
+                <div class="h-20">
+                    <canvas id="categoryChart" class="w-full h-full"></canvas>
+                </div>
+            </div>
+        </div>
+
+        {% if category_counts %}
+        <div class="bg-white p-4 rounded-lg shadow border mb-6">
+            <h3 class="text-lg font-semibold mb-3 flex items-center">
+                <i class="fas fa-list text-indigo-500 mr-2"></i> Category Breakdown
+            </h3>
+            <table class="w-full text-sm">
+                <thead class="bg-gray-100">
+                    <tr><th class="p-2 text-left">Category</th><th class="p-2 text-left">Count</th></tr>
+                </thead>
+                <tbody>
+                    {% for cat, count in category_counts.items() %}
+                    <tr class="border-b"><td class="p-2">{{ cat }}</td><td class="p-2">{{ count }}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+
+        <div class="flex justify-between items-center mt-4">
+            <a href="/analysis" class="text-indigo-600 hover:text-indigo-800 text-sm flex items-center">
+                <i class="fas fa-arrow-left mr-1"></i> Back to Analysis
+            </a>
+            <a href="/staff" class="text-gray-600 hover:text-gray-800 text-sm flex items-center">
+                <i class="fas fa-tachometer-alt mr-1"></i> Dashboard
+            </a>
+        </div>
+    </div>
+
+    <script>
+        // Chart for resolution buckets
+        const resolutionCtx = document.getElementById('resolutionChart').getContext('2d');
+        new Chart(resolutionCtx, {
+            type: 'bar',
+            data: {
+                labels: ['Same Day', '1-3 Days', '4-7 Days', '7+ Days'],
+                datasets: [{
+                    label: 'Complaints',
+                    data: [{{ resolution_buckets['Same Day'] }}, {{ resolution_buckets['1-3 Days'] }}, {{ resolution_buckets['4-7 Days'] }}, {{ resolution_buckets['7+ Days'] }}],
+                    backgroundColor: ['#4F46E5', '#10B981', '#F59E0B', '#EF4444']
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: { y: { beginAtZero: true, ticks: { font: { size: 8 } } } },
+                plugins: { legend: { display: false } }
+            }
+        });
+
+        // Category pie chart
+        const categoryCtx = document.getElementById('categoryChart').getContext('2d');
+        const catLabels = {{ category_counts.keys() | list | tojson }};
+        const catData = {{ category_counts.values() | list | tojson }};
+        new Chart(categoryCtx, {
+            type: 'pie',
+            data: {
+                labels: catLabels,
+                datasets: [{
+                    data: catData,
+                    backgroundColor: ['#4F46E5', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899']
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'bottom', labels: { font: { size: 8 } } } }
+            }
+        });
+    </script>
+</body>
+</html>

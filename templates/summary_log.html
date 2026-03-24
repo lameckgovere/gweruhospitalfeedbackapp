@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Summary Log - Grievance Redress Mechanism Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-6">
+    <div class="max-w-7xl mx-auto bg-white p-6 rounded shadow">
+        <h2 class="text-2xl font-bold text-indigo-600 mb-4">Summary Log</h2>
+
+        <!-- Advanced Search Form -->
+        <form method="get" class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <input type="text" name="q" placeholder="Search keyword..." class="border p-2 rounded" value="{{ request.args.get('q','') }}">
+            <select name="type" class="border p-2 rounded">
+                <option value="all">All Types</option>
+                <option value="complaint" {% if request.args.get('type')=='complaint' %}selected{% endif %}>Complaints</option>
+                <option value="suggestion" {% if request.args.get('type')=='suggestion' %}selected{% endif %}>Suggestions</option>
+                <option value="compliment" {% if request.args.get('type')=='compliment' %}selected{% endif %}>Compliments</option>
+            </select>
+            <select name="status" class="border p-2 rounded">
+                <option value="all">All Statuses</option>
+                <option value="Pending" {% if request.args.get('status')=='Pending' %}selected{% endif %}>Pending</option>
+                <option value="Resolved" {% if request.args.get('status')=='Resolved' %}selected{% endif %}>Resolved</option>
+                <option value="Implemented" {% if request.args.get('status')=='Implemented' %}selected{% endif %}>Implemented</option>
+                <option value="Referred" {% if request.args.get('status')=='Referred' %}selected{% endif %}>Referred</option>
+                <option value="Maintained" {% if request.args.get('status')=='Maintained' %}selected{% endif %}>Maintained</option>
+                <option value="Deviated" {% if request.args.get('status')=='Deviated' %}selected{% endif %}>Deviated</option>
+            </select>
+            <select name="category" class="border p-2 rounded">
+                <option value="">All Categories</option>
+                {% for cat in categories %}
+                <option value="{{ cat.id }}" {% if request.args.get('category')|int == cat.id %}selected{% endif %}>{{ cat.name }}</option>
+                {% endfor %}
+            </select>
+            <input type="date" name="start_date" placeholder="Start Date" class="border p-2 rounded" value="{{ request.args.get('start_date','') }}">
+            <input type="date" name="end_date" placeholder="End Date" class="border p-2 rounded" value="{{ request.args.get('end_date','') }}">
+            <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">Apply Filters</button>
+            <a href="/summary_log" class="bg-gray-500 text-white px-4 py-2 rounded text-center">Reset</a>
+        </form>
+
+        <!-- Export Buttons -->
+        <div class="flex gap-2 mb-4">
+            <a href="/export_csv" class="bg-green-600 text-white px-3 py-1 rounded text-sm">Export CSV</a>
+            <a href="/export_docx" class="bg-purple-600 text-white px-3 py-1 rounded text-sm">Export DOCX</a>
+        </div>
+
+        <!-- Feedback Tables (split by type as before) -->
+        {% set types = {'complaint': 'Complaints', 'suggestion': 'Suggestions', 'compliment': 'Compliments'} %}
+        {% for type_key, type_label in types.items() %}
+        <div class="mb-10">
+            <h3 class="text-lg font-semibold text-blue-600 mb-2">{{ type_label }}</h3>
+            <table class="min-w-full border text-sm">
+                <thead class="bg-gray-200">
+                    <tr>
+                        <th class="p-2 border">Ref</th>
+                        <th class="p-2 border">Issue</th>
+                        <th class="p-2 border">Date</th>
+                        <th class="p-2 border">Mechanism</th>
+                        <th class="p-2 border">Categories</th>
+                        <th class="p-2 border">Action Taken</th>
+                        <th class="p-2 border">Final Comment</th>
+                        <th class="p-2 border">Final Status</th>
+                        <th class="p-2 border">Update</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for fb in feedbacks if fb.type == type_key %}
+                    <tr>
+                        <form method="post" action="/update_feedback/{{ fb.id }}">
+                            <td class="p-2 border">{{ fb.reference }}</td>
+                            <td class="p-2 border">{{ fb.issue_received[:50] }}...</td>
+                            <td class="p-2 border">{{ fb.created_at.strftime('%Y-%m-%d') }}</td>
+                            <td class="p-2 border">{{ fb.mechanism }}</td>
+                            <td class="p-2 border">
+                                {% if fb.categories %}
+                                    {{ fb.categories|map(attribute='name')|join(', ') }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                                <br>
+                                <select name="categories" multiple class="text-xs border mt-1">
+                                    {% for cat in categories %}
+                                    <option value="{{ cat.id }}" {% if cat in fb.categories %}selected{% endif %}>{{ cat.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </td>
+                            <td class="p-2 border">
+                                {% if fb.first_action and fb.final_status %}
+                                    {{ fb.first_action }}
+                                {% else %}
+                                    <input name="first_action" class="border p-1 w-full" value="{{ fb.first_action or '' }}">
+                                {% endif %}
+                            </td>
+                            <td class="p-2 border">
+                                {% if fb.final_status %}
+                                    {{ fb.final_comment or '-' }}
+                                {% else %}
+                                    <input name="final_comment" class="border p-1 w-full" value="{{ fb.final_comment or '' }}">
+                                {% endif %}
+                            </td>
+                            <td class="p-2 border">
+                                {% if fb.final_status %}
+                                    {{ fb.final_status }}
+                                {% else %}
+                                    <select name="final_status" class="border p-1 w-full">
+                                        <option value="">--Select--</option>
+                                        {% if type_key == 'complaint' %}
+                                            <option value="Pending">Pending</option>
+                                            <option value="Resolved">Resolved</option>
+                                            <option value="Referred">Referred</option>
+                                        {% elif type_key == 'suggestion' %}
+                                            <option value="Implemented">Implemented</option>
+                                            <option value="Not Implemented">Not Implemented</option>
+                                        {% elif type_key == 'compliment' %}
+                                            <option value="Maintained">Maintained</option>
+                                            <option value="Deviated">Deviated</option>
+                                        {% endif %}
+                                    </select>
+                                {% endif %}
+                            </td>
+                            <td class="p-2 border text-center">
+                                {% if fb.final_status %}
+                                    <span class="text-green-600 font-bold text-xl">✔</span>
+                                {% else %}
+                                    <button class="bg-indigo-600 text-white px-2 py-1 rounded text-xs">Update</button>
+                                {% endif %}
+                            </td>
+                        </form>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endfor %}
+        <a href="/staff" class="text-gray-600 hover:underline">← Back to Dashboard</a>
+    </div>
+</body>
+</html>

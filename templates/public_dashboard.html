@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Public Feedback Dashboard - Gweru District Hospital</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-100 p-4">
+    <div class="max-w-4xl mx-auto bg-white p-6 rounded shadow">
+        <h2 class="text-2xl font-bold text-indigo-600 mb-4">Public Feedback Dashboard</h2>
+        <p class="mb-4">Transparency in our service improvement. (Updated daily)</p>
+
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div class="bg-blue-100 p-4 rounded text-center">
+                <p class="text-sm">Total Feedback</p>
+                <h3 class="text-2xl font-bold">{{ total }}</h3>
+            </div>
+            <div class="bg-green-100 p-4 rounded text-center">
+                <p class="text-sm">Complaints</p>
+                <h3 class="text-2xl font-bold">{{ complaints }}</h3>
+            </div>
+            <div class="bg-yellow-100 p-4 rounded text-center">
+                <p class="text-sm">Suggestions</p>
+                <h3 class="text-2xl font-bold">{{ suggestions }}</h3>
+            </div>
+            <div class="bg-pink-100 p-4 rounded text-center">
+                <p class="text-sm">Compliments</p>
+                <h3 class="text-2xl font-bold">{{ compliments }}</h3>
+            </div>
+        </div>
+
+        <div class="mb-6">
+            <h3 class="text-lg font-semibold mb-2">Complaint Resolution Rate</h3>
+            <div class="w-full bg-gray-200 rounded-full h-4">
+                <div class="bg-green-600 h-4 rounded-full" style="width: {{ resolved_rate }}%;"></div>
+            </div>
+            <p class="text-sm mt-1">{{ resolved_rate }}% of complaints resolved</p>
+        </div>
+
+        <!-- Smaller graph: height 200px, line chart -->
+        <div class="mb-6">
+            <h3 class="text-lg font-semibold mb-2">Feedback Volume by Month</h3>
+            <div style="height: 200px;">
+                <canvas id="monthlyChart"></canvas>
+            </div>
+        </div>
+
+        <div class="text-center">
+            <a href="/" class="text-indigo-600 hover:underline">← Back to Welcome Page</a>
+        </div>
+    </div>
+
+    <script>
+        const months = {{ months | tojson }};
+        const counts = {{ counts | tojson }};
+        new Chart(document.getElementById('monthlyChart'), {
+            type: 'line',
+            data: {
+                labels: months,
+                datasets: [{
+                    label: 'Feedback Count',
+                    data: counts,
+                    borderColor: '#4F46E5',
+                    backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                    tension: 0.1,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: { beginAtZero: true, ticks: { stepSize: 1 } }
+                }
+            }
+        });
+    </script>
+</body>
+</html>

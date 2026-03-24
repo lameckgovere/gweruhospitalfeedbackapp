@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage Categories - Gweru Feedback App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-6">
+    <div class="max-w-3xl mx-auto bg-white p-6 rounded shadow">
+        <h2 class="text-2xl font-bold text-indigo-600 mb-4">Manage Categories</h2>
+
+        <form method="post" class="flex gap-2 mb-6">
+            <input type="text" name="name" placeholder="New category name" required class="border p-2 flex-grow rounded">
+            <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">Add</button>
+        </form>
+
+        <ul class="space-y-2">
+            {% for cat in categories %}
+            <li class="flex justify-between items-center border p-2 rounded">
+                <span>{{ cat.name }}</span>
+                <a href="/category/delete/{{ cat.id }}" class="text-red-600 hover:underline" onclick="return confirm('Delete this category?')">Delete</a>
+            </li>
+            {% endfor %}
+        </ul>
+
+        <a href="/staff" class="block mt-4 text-indigo-600 hover:underline">← Back to Dashboard</a>
+    </div>
+</body>
+</html>

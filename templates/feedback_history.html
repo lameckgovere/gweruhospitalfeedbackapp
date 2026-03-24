@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feedback History - {{ feedback.reference }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-6">
+    <div class="max-w-4xl mx-auto bg-white p-6 rounded shadow">
+        <h2 class="text-2xl font-bold text-indigo-600 mb-4">History for {{ feedback.reference }}</h2>
+        <p><strong>Issue:</strong> {{ feedback.issue_received }}</p>
+        <p><strong>Type:</strong> {{ feedback.type }}</p>
+        <p><strong>Current Status:</strong> {{ feedback.final_status or 'Pending' }}</p>
+
+        <h3 class="text-lg font-semibold mt-6 mb-2">Timeline</h3>
+        <table class="w-full border text-sm">
+            <thead class="bg-gray-200">
+                <tr>
+                    <th class="p-2 border">Date/Time</th>
+                    <th class="p-2 border">Action</th>
+                    <th class="p-2 border">User</th>
+                    <th class="p-2 border">Details</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for h in feedback.history|sort(attribute='timestamp', reverse=True) %}
+                <tr>
+                    <td class="p-2 border">{{ h.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
+                    <td class="p-2 border">{{ h.action }}</td>
+                    <td class="p-2 border">{{ h.user.username if h.user else 'Anonymous' }}</td>
+                    <td class="p-2 border">
+                        {% if h.old_status and h.new_status %}
+                            Status changed from {{ h.old_status }} to {{ h.new_status }}
+                        {% endif %}
+                        {% if h.comment %}
+                            <br>Comment: {{ h.comment }}
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <a href="/summary_log" class="block mt-4 text-indigo-600 hover:underline">← Back to Summary Log</a>
+    </div>
+</body>
+</html>
