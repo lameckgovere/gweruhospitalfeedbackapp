@@ -2,12 +2,13 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Summary Log - Grievance Redress Mechanism Tracker</title>
+    <title>Feedback Summary - Grievance Redress Mechanism Tracker</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 </head>
 <body class="bg-gray-100 p-6">
     <div class="max-w-7xl mx-auto bg-white p-6 rounded shadow">
-        <h2 class="text-2xl font-bold text-indigo-600 mb-4">Summary Log</h2>
+        <h2 class="text-2xl font-bold text-indigo-600 mb-4">Feedback Summary Log</h2>
 
         <!-- Advanced Search Form -->
         <form method="get" class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
@@ -41,11 +42,11 @@
 
         <!-- Export Buttons -->
         <div class="flex gap-2 mb-4">
-            <a href="/export_csv" class="bg-green-600 text-white px-3 py-1 rounded text-sm">Export CSV</a>
-            <a href="/export_docx" class="bg-purple-600 text-white px-3 py-1 rounded text-sm">Export DOCX</a>
+            <a href="/export_csv" class="bg-green-600 text-white px-3 py-1 rounded text-sm"><i class="fas fa-file-csv mr-1"></i> Export CSV</a>
+            <a href="/export_docx" class="bg-purple-600 text-white px-3 py-1 rounded text-sm"><i class="fas fa-file-word mr-1"></i> Export DOCX</a>
         </div>
 
-        <!-- Feedback Tables (split by type as before) -->
+        <!-- Feedback Tables (split by type) -->
         {% set types = {'complaint': 'Complaints', 'suggestion': 'Suggestions', 'compliment': 'Compliments'} %}
         {% for type_key, type_label in types.items() %}
         <div class="mb-10">
@@ -62,10 +63,13 @@
                         <th class="p-2 border">Final Comment</th>
                         <th class="p-2 border">Final Status</th>
                         <th class="p-2 border">Update</th>
+                        {% if session.role == 'admin' %}
+                        <th class="p-2 border">Delete</th>
+                        {% endif %}
                     </tr>
                 </thead>
                 <tbody>
-                {% for fb in feedbacks if fb.type == type_key %}
+                    {% for fb in feedbacks if fb.type == type_key %}
                     <tr>
                         <form method="post" action="/update_feedback/{{ fb.id }}">
                             <td class="p-2 border">{{ fb.reference }}</td>
@@ -127,13 +131,24 @@
                                 {% endif %}
                             </td>
                         </form>
+                        {% if session.role == 'admin' %}
+                        <td class="p-2 border text-center">
+                            <form method="post" action="{{ url_for('admin_feedback_delete', fb_id=fb.id) }}"
+                                  onsubmit="return confirm('Are you sure you want to delete feedback {{ fb.reference }}?')">
+                                <button type="submit" class="text-red-600 hover:text-red-800">
+                                    <i class="fas fa-trash-alt"></i> Delete
+                                </button>
+                            </form>
+                        </td>
+                        {% endif %}
                     </tr>
-                {% endfor %}
+                    {% endfor %}
                 </tbody>
             </table>
         </div>
         {% endfor %}
-        <a href="/staff" class="text-gray-600 hover:underline">← Back to Dashboard</a>
+
+        <a href="/staff" class="text-gray-600 hover:underline"><i class="fas fa-arrow-left mr-1"></i> Back to Dashboard</a>
     </div>
 </body>
 </html>

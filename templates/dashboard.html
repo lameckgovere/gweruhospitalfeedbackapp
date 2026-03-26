@@ -55,13 +55,21 @@
             </table>
         </div>
 
-        <!-- Navigation Grid (About/Contact/Help removed) -->
+        <!-- Navigation Grid -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 w-full max-w-3xl mx-auto mt-8">
             <a href="/submit" class="bg-blue-600 text-white p-4 rounded hover:bg-blue-700 text-center">Submit Feedback (Staff)</a>
             <a href="/summary_log" class="bg-purple-600 text-white p-4 rounded hover:bg-purple-700 text-center">Summary Log</a>
             <a href="/analysis" class="bg-green-600 text-white p-4 rounded hover:bg-green-700 text-center">Analysis & Reports</a>
             <a href="/categories" class="bg-amber-600 text-white p-4 rounded hover:bg-amber-700 text-center">Manage Categories</a>
             <a href="/action_times" class="bg-teal-600 text-white p-4 rounded hover:bg-teal-700 text-center">Action Times</a>
+
+            <!-- Admin-only links -->
+            {% if session.role == 'admin' %}
+                <a href="/admin/users" class="bg-red-600 text-white p-4 rounded hover:bg-red-700 text-center">User Management</a>
+                <a href="/admin/backup" class="bg-green-600 text-white p-4 rounded hover:bg-green-700 text-center">Backup System</a>
+                <a href="/admin/restore" class="bg-yellow-600 text-white p-4 rounded hover:bg-yellow-700 text-center">Restore System</a>
+                <a href="/admin/audit_log" class="bg-blue-600 text-white p-4 rounded hover:bg-blue-700 text-center">Audit Log</a>
+            {% endif %}
         </div>
     </main>
 
@@ -83,12 +91,14 @@
             const tbody = document.getElementById('recent-table');
             tbody.innerHTML = '';
             data.recent.forEach(item => {
-                const row = `<tr>
-                    <td class="p-2 border-b">${item.reference}</td>
-                    <td class="p-2 border-b">${item.issue}</td>
-                    <td class="p-2 border-b">${item.type}</td>
-                    <td class="p-2 border-b">${item.date}</td>
-                </tr>`;
+                const row = `
+                    <tr>
+                        <td class="p-2 border-b">${item.reference}</td>
+                        <td class="p-2 border-b">${item.issue}</td>
+                        <td class="p-2 border-b">${item.type}</td>
+                        <td class="p-2 border-b">${item.date}</td>
+                    </tr>
+                `;
                 tbody.innerHTML += row;
             });
         }

@@ -3,6 +3,9 @@ import io
 import csv
 import random
 import string
+import zipfile
+import tempfile
+import shutil
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, redirect, url_for, session, send_file, jsonify, flash
 from flask_sqlalchemy import SQLAlchemy
@@ -13,19 +16,19 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from docx import Document
 from textblob import TextBlob
+from sqlalchemy import text
+from sqlalchemy.orm import joinedload
 
 # --- Environment Configuration -------------------------------------------------
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'gweru_secret_key_2026')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///feedback.db')
-# If using PostgreSQL on Sevalla, the DATABASE_URL will be set automatically.
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB
 app.config['BABEL_DEFAULT_LOCALE'] = 'en'
 app.config['BABEL_TRANSLATION_DIRECTORIES'] = 'translations'
 
-# Ensure upload folder exists at startup
 def create_upload_folder():
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
@@ -34,7 +37,7 @@ create_upload_folder()
 # --- Extensions ----------------------------------------------------------------
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
-CORS(app, resources={r"/*": {"origins": "*"}})  # Restrict in production to your domain
+CORS(app, resources={r"/*": {"origins": "*"}})
 babel = Babel()
 babel.init_app(app, locale_selector=lambda: session.get('lang', request.accept_languages.best_match(['en', 'sn', 'nd'])))
 
@@ -50,14 +53,35 @@ def log_audit(action, details=None):
     db.session.add(log)
     db.session.commit()
 
-# Ensure NLTK data for TextBlob is downloaded
+def parse_datetime(dt_str):
+    if not dt_str:
+        return None
+    try:
+        return datetime.strptime(dt_str, '%Y-%m-%d %H:%M:%S.%f')
+    except ValueError:
+        return datetime.strptime(dt_str, '%Y-%m-%d %H:%M:%S')
+
+# --- Admin decorator -----------------------------------------------------------
+def admin_required(f):
+    from functools import wraps
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get('logged_in') or session.get('role') != 'admin':
+            flash('Admin access required.', 'error')
+            return redirect(url_for('staff_dashboard'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+# --- NLTK Data ----------------------------------------------------------------
 import nltk
 try:
     nltk.data.find('tokenizers/punkt')
 except LookupError:
     nltk.download('punkt', quiet=True)
 
-# --- Database Models -----------------------------------------------------------
+# ------------------------------------------------------------------------------
+# DATABASE MODELS
+# ------------------------------------------------------------------------------
 feedback_categories = db.Table('feedback_categories',
     db.Column('feedback_id', db.Integer, db.ForeignKey('feedback.id'), primary_key=True),
     db.Column('category_id', db.Integer, db.ForeignKey('category.id'), primary_key=True)
@@ -84,7 +108,7 @@ class Feedback(db.Model):
     reference = db.Column(db.String(20), unique=True, nullable=False, default=generate_reference)
     issue_received = db.Column(db.String(500), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.now)
-    type = db.Column(db.String(50), nullable=False)  # complaint, compliment, suggestion
+    type = db.Column(db.String(50), nullable=False)
     mechanism = db.Column(db.String(100), nullable=True)
     recommendation = db.Column(db.String(500), nullable=True)
     first_action = db.Column(db.String(500), nullable=True)
@@ -139,6 +163,8 @@ class AuditLog(db.Model):
     action = db.Column(db.String(100), nullable=False)
     details = db.Column(db.Text, nullable=True)
     timestamp = db.Column(db.DateTime, default=datetime.now)
+
+    user = db.relationship('User', backref='audit_logs')
 
 # ------------------------------------------------------------------------------
 # AUTHENTICATION ROUTES
@@ -480,6 +506,7 @@ def analysis():
 
 @app.route("/deep_analysis_data")
 def deep_analysis_data():
+    # (unchanged, keep original)
     month = request.args.get("month", type=int)
     quarter = request.args.get("quarter")
     year = request.args.get("year", type=int)
@@ -609,6 +636,7 @@ def deep_analysis():
 
 @app.route("/deep_trends")
 def deep_trends():
+    # (unchanged, keep original)
     year = request.args.get("year", default=datetime.now().year, type=int)
     feedback_total_by_month = {m: 0 for m in range(1, 13)}
     complaint_by_month = {m: {"resolved": 0, "total": 0} for m in range(1, 13)}
@@ -688,6 +716,7 @@ def deep_trends():
 
 @app.route("/current_month")
 def current_month():
+    # (unchanged)
     now = datetime.now()
     year = now.year
     month = now.month
@@ -791,7 +820,343 @@ def all_feedback():
     } for fb in data])
 
 # ------------------------------------------------------------------------------
-# INITIALIZATION (for development only)
+# ADMIN-ONLY ROUTES
+# ------------------------------------------------------------------------------
+@app.route('/admin/users', methods=['GET', 'POST'])
+@admin_required
+def admin_users():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        role = request.form.get('role', 'viewer')
+        if not username or not password:
+            flash('Username and password required.', 'error')
+            return redirect(url_for('admin_users'))
+        existing = User.query.filter_by(username=username).first()
+        if existing:
+            flash('Username already exists.', 'error')
+            return redirect(url_for('admin_users'))
+        user = User(username=username, role=role)
+        user.set_password(password)
+        db.session.add(user)
+        db.session.commit()
+        log_audit('user_created', f'User {username} created by admin')
+        flash(f'User {username} created successfully.', 'success')
+        return redirect(url_for('admin_users'))
+    users = User.query.all()
+    return render_template('admin_users.html', users=users)
+
+@app.route('/admin/user/delete/<int:user_id>')
+@admin_required
+def admin_user_delete(user_id):
+    user = User.query.get_or_404(user_id)
+    if user.id == session.get('user_id'):
+        flash('You cannot delete yourself.', 'error')
+        return redirect(url_for('admin_users'))
+    db.session.delete(user)
+    db.session.commit()
+    log_audit('user_deleted', f'User {user.username} deleted by admin')
+    flash(f'User {user.username} deleted.', 'success')
+    return redirect(url_for('admin_users'))
+
+@app.route('/admin/feedback/delete/<int:fb_id>', methods=['POST'])
+@admin_required
+def admin_feedback_delete(fb_id):
+    fb = Feedback.query.get_or_404(fb_id)
+    log_audit('feedback_deleted', f'Feedback {fb.reference} deleted by admin')
+    db.session.delete(fb)
+    db.session.commit()
+    flash(f'Feedback {fb.reference} deleted.', 'success')
+    return redirect(request.referrer or url_for('summary_log'))
+
+@app.route('/admin/backup')
+@admin_required
+def admin_backup():
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        # Users
+        users = User.query.all()
+        csv_buffer = io.StringIO()
+        writer = csv.writer(csv_buffer)
+        writer.writerow(['id', 'username', 'role', 'password_hash'])
+        for u in users:
+            writer.writerow([u.id, u.username, u.role, u.password_hash])
+        zip_file.writestr('users.csv', csv_buffer.getvalue())
+
+        # Categories
+        categories = Category.query.all()
+        csv_buffer = io.StringIO()
+        writer = csv.writer(csv_buffer)
+        writer.writerow(['id', 'name'])
+        for c in categories:
+            writer.writerow([c.id, c.name])
+        zip_file.writestr('categories.csv', csv_buffer.getvalue())
+
+        # Feedback
+        feedbacks = Feedback.query.all()
+        csv_buffer = io.StringIO()
+        writer = csv.writer(csv_buffer)
+        writer.writerow([
+            'id', 'reference', 'issue_received', 'created_at', 'type', 'mechanism',
+            'recommendation', 'first_action', 'action_taken_at', 'implementation_status',
+            'final_comment', 'final_status', 'action_timestamp', 'resolved_at',
+            'contact_email', 'contact_phone', 'categories'
+        ])
+        for fb in feedbacks:
+            cats = ', '.join([c.name for c in fb.categories])
+            writer.writerow([
+                fb.id, fb.reference, fb.issue_received, fb.created_at, fb.type, fb.mechanism,
+                fb.recommendation, fb.first_action, fb.action_taken_at, fb.implementation_status,
+                fb.final_comment, fb.final_status, fb.action_timestamp, fb.resolved_at,
+                fb.contact_email, fb.contact_phone, cats
+            ])
+        zip_file.writestr('feedback.csv', csv_buffer.getvalue())
+
+        # FeedbackHistory
+        histories = FeedbackHistory.query.all()
+        csv_buffer = io.StringIO()
+        writer = csv.writer(csv_buffer)
+        writer.writerow(['id', 'feedback_id', 'user_id', 'action', 'old_status', 'new_status', 'comment', 'timestamp'])
+        for h in histories:
+            writer.writerow([h.id, h.feedback_id, h.user_id, h.action, h.old_status, h.new_status, h.comment, h.timestamp])
+        zip_file.writestr('feedback_history.csv', csv_buffer.getvalue())
+
+        # Attachments
+        attachments = Attachment.query.all()
+        csv_buffer = io.StringIO()
+        writer = csv.writer(csv_buffer)
+        writer.writerow(['id', 'feedback_id', 'filename', 'filepath', 'uploaded_at'])
+        for a in attachments:
+            writer.writerow([a.id, a.feedback_id, a.filename, a.filepath, a.uploaded_at])
+        zip_file.writestr('attachments.csv', csv_buffer.getvalue())
+
+        # AuditLog
+        audit_logs = AuditLog.query.all()
+        csv_buffer = io.StringIO()
+        writer = csv.writer(csv_buffer)
+        writer.writerow(['id', 'user_id', 'action', 'details', 'timestamp'])
+        for al in audit_logs:
+            writer.writerow([al.id, al.user_id, al.action, al.details, al.timestamp])
+        zip_file.writestr('audit_log.csv', csv_buffer.getvalue())
+
+        # Uploaded files
+        upload_dir = app.config['UPLOAD_FOLDER']
+        if os.path.exists(upload_dir):
+            for root, dirs, files in os.walk(upload_dir):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    arcname = os.path.join('uploads', file)
+                    zip_file.write(file_path, arcname)
+
+    zip_buffer.seek(0)
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    return send_file(
+        zip_buffer,
+        mimetype='application/zip',
+        as_attachment=True,
+        download_name=f'backup_{timestamp}.zip'
+    )
+
+@app.route('/admin/restore', methods=['GET', 'POST'])
+@admin_required
+def admin_restore():
+    if request.method == 'POST':
+        if 'backup_file' not in request.files:
+            flash('No file selected.', 'error')
+            return redirect(url_for('admin_restore'))
+        file = request.files['backup_file']
+        if file.filename == '':
+            flash('No file selected.', 'error')
+            return redirect(url_for('admin_restore'))
+        if not file.filename.endswith('.zip'):
+            flash('Only ZIP files allowed.', 'error')
+            return redirect(url_for('admin_restore'))
+
+        temp_dir = tempfile.mkdtemp()
+        try:
+            zip_path = os.path.join(temp_dir, 'backup.zip')
+            file.save(zip_path)
+            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                zip_ref.extractall(temp_dir)
+
+            # Clear existing data in correct order
+            db.session.execute(text('DELETE FROM feedback_categories'))
+            db.session.query(Attachment).delete()
+            db.session.query(FeedbackHistory).delete()
+            db.session.query(Feedback).delete()
+            db.session.query(Category).delete()
+            db.session.query(User).delete()
+            db.session.query(AuditLog).delete()
+            db.session.commit()
+
+            # Import categories
+            categories_csv = os.path.join(temp_dir, 'categories.csv')
+            if os.path.exists(categories_csv):
+                with open(categories_csv, 'r', encoding='utf-8') as f:
+                    reader = csv.reader(f)
+                    next(reader)
+                    for row in reader:
+                        if len(row) >= 2:
+                            cat = Category(name=row[1])
+                            db.session.add(cat)
+                db.session.commit()
+
+            # Import users
+            users_csv = os.path.join(temp_dir, 'users.csv')
+            if os.path.exists(users_csv):
+                with open(users_csv, 'r', encoding='utf-8') as f:
+                    reader = csv.reader(f)
+                    next(reader)
+                    for row in reader:
+                        if len(row) >= 4:
+                            user = User(
+                                id=int(row[0]),
+                                username=row[1],
+                                role=row[2],
+                                password_hash=row[3]
+                            )
+                            db.session.add(user)
+                db.session.commit()
+
+            # Import feedback
+            feedbacks_csv = os.path.join(temp_dir, 'feedback.csv')
+            if os.path.exists(feedbacks_csv):
+                with open(feedbacks_csv, 'r', encoding='utf-8') as f:
+                    reader = csv.reader(f)
+                    next(reader)
+                    for row in reader:
+                        if len(row) >= 17:
+                            fb = Feedback(
+                                id=int(row[0]),
+                                reference=row[1],
+                                issue_received=row[2],
+                                created_at=parse_datetime(row[3]),
+                                type=row[4],
+                                mechanism=row[5] if row[5] else None,
+                                recommendation=row[6] if row[6] else None,
+                                first_action=row[7] if row[7] else None,
+                                action_taken_at=parse_datetime(row[8]),
+                                implementation_status=row[9] if row[9] else None,
+                                final_comment=row[10] if row[10] else None,
+                                final_status=row[11] if row[11] else None,
+                                action_timestamp=parse_datetime(row[12]),
+                                resolved_at=parse_datetime(row[13]),
+                                contact_email=row[14] if row[14] else None,
+                                contact_phone=row[15] if row[15] else None
+                            )
+                            db.session.add(fb)
+                db.session.commit()
+
+                # Assign categories (many-to-many)
+                with open(feedbacks_csv, 'r', encoding='utf-8') as f:
+                    reader = csv.reader(f)
+                    next(reader)
+                    for row in reader:
+                        if len(row) >= 17:
+                            fb_id = int(row[0])
+                            cats_str = row[16]
+                            if cats_str:
+                                fb = Feedback.query.get(fb_id)
+                                if fb:
+                                    cat_names = [c.strip() for c in cats_str.split(',')]
+                                    cats = Category.query.filter(Category.name.in_(cat_names)).all()
+                                    fb.categories = cats
+                db.session.commit()
+
+            # Import feedback history
+            history_csv = os.path.join(temp_dir, 'feedback_history.csv')
+            if os.path.exists(history_csv):
+                with open(history_csv, 'r', encoding='utf-8') as f:
+                    reader = csv.reader(f)
+                    next(reader)
+                    for row in reader:
+                        if len(row) >= 8:
+                            h = FeedbackHistory(
+                                id=int(row[0]),
+                                feedback_id=int(row[1]),
+                                user_id=int(row[2]) if row[2] else None,
+                                action=row[3],
+                                old_status=row[4] if row[4] else None,
+                                new_status=row[5] if row[5] else None,
+                                comment=row[6] if row[6] else None,
+                                timestamp=parse_datetime(row[7])
+                            )
+                            db.session.add(h)
+                db.session.commit()
+
+            # Import attachments
+            attachments_csv = os.path.join(temp_dir, 'attachments.csv')
+            if os.path.exists(attachments_csv):
+                with open(attachments_csv, 'r', encoding='utf-8') as f:
+                    reader = csv.reader(f)
+                    next(reader)
+                    for row in reader:
+                        if len(row) >= 5:
+                            a = Attachment(
+                                id=int(row[0]),
+                                feedback_id=int(row[1]),
+                                filename=row[2],
+                                filepath=row[3],
+                                uploaded_at=parse_datetime(row[4])
+                            )
+                            db.session.add(a)
+                db.session.commit()
+
+            # Import audit log
+            audit_csv = os.path.join(temp_dir, 'audit_log.csv')
+            if os.path.exists(audit_csv):
+                with open(audit_csv, 'r', encoding='utf-8') as f:
+                    reader = csv.reader(f)
+                    next(reader)
+                    for row in reader:
+                        if len(row) >= 5:
+                            al = AuditLog(
+                                id=int(row[0]),
+                                user_id=int(row[1]) if row[1] else None,
+                                action=row[2],
+                                details=row[3] if row[3] else None,
+                                timestamp=parse_datetime(row[4])
+                            )
+                            db.session.add(al)
+                db.session.commit()
+
+            # Restore uploaded files
+            uploads_source = os.path.join(temp_dir, 'uploads')
+            if os.path.exists(uploads_source):
+                upload_dest = app.config['UPLOAD_FOLDER']
+                if os.path.exists(upload_dest):
+                    shutil.rmtree(upload_dest)
+                shutil.copytree(uploads_source, upload_dest)
+
+            # Log restore (before session is cleared)
+            log_audit('system_restore', 'System restored from backup')
+
+            # Clear session and force logout
+            session.clear()
+            flash('System restored successfully. Please log in again with restored credentials.', 'success')
+            return redirect(url_for('login'))
+
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Restore failed: {str(e)}', 'error')
+            return redirect(url_for('admin_restore'))
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    return render_template('admin_restore.html')
+
+# ------------------------------------------------------------------------------
+# AUDIT LOG VIEW
+# ------------------------------------------------------------------------------
+@app.route('/admin/audit_log')
+@admin_required
+def admin_audit_log():
+    page = request.args.get('page', 1, type=int)
+    per_page = 50
+    logs = AuditLog.query.options(joinedload(AuditLog.user)).order_by(AuditLog.timestamp.desc()).paginate(page=page, per_page=per_page)
+    return render_template('admin_audit_log.html', logs=logs)
+# ------------------------------------------------------------------------------
+# INITIALIZATION (development only)
 # ------------------------------------------------------------------------------
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", use_reloader=False)
