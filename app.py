@@ -18,6 +18,8 @@ from docx import Document
 from textblob import TextBlob
 from sqlalchemy import text
 from sqlalchemy.orm import joinedload
+from xhtml2pdf import pisa
+from io import BytesIO
 
 # --- Environment Configuration ------------------------------------
 app = Flask(__name__)
@@ -172,6 +174,22 @@ class AuditLog(db.Model):
     timestamp = db.Column(db.DateTime, default=datetime.now)
 
     user = db.relationship('User', backref='audit_logs')
+
+# --- Database initialization (auto-create tables & admin) ---
+with app.app_context():
+    db.create_all()
+    # Create admin user if none exists
+    if not User.query.filter_by(username="admin").first():
+        admin = User(
+            username="admin",
+            password_hash=generate_password_hash("admin123"),
+            role="admin"
+        )
+        db.session.add(admin)
+        db.session.commit()
+        print("✅ Database initialized and admin user created (username: admin, password: admin123)")
+    else:
+        print("✅ Database already initialized.")
 
 # -----------------------------------------------------------------
 # AUTHENTICATION ROUTES
@@ -330,7 +348,7 @@ def dashboard_stats():
     recent_list = [{
         'id': f.id,
         'reference': f.reference,
-        'issue': f.issue_received,  # full text, no truncation
+        'issue': f.issue_received,  # full text
         'type': f.type,
         'date': f.created_at.strftime('%Y-%m-%d')
     } for f in recent]
@@ -408,6 +426,49 @@ def summary_log():
     feedbacks = query.order_by(Feedback.created_at.desc()).all()
     categories = Category.query.all()
     return render_template("summary_log.html", feedbacks=feedbacks, categories=categories)
+
+@app.route("/summary_log/pdf")
+def summary_log_pdf():
+    # Same query logic as summary_log
+    query = Feedback.query
+    type_filter = request.args.get('type')
+    if type_filter and type_filter != 'all':
+        query = query.filter_by(type=type_filter)
+    status_filter = request.args.get('status')
+    if status_filter and status_filter != 'all':
+        query = query.filter_by(final_status=status_filter)
+    category_id = request.args.get('category', type=int)
+    if category_id:
+        query = query.join(Feedback.categories).filter(Category.id == category_id)
+    keyword = request.args.get('q')
+    if keyword:
+        query = query.filter(Feedback.issue_received.contains(keyword) |
+                             Feedback.recommendation.contains(keyword))
+    start_date = request.args.get('start_date')
+    if start_date:
+        start = datetime.strptime(start_date, '%Y-%m-%d')
+        query = query.filter(Feedback.created_at >= start)
+    end_date = request.args.get('end_date')
+    if end_date:
+        end = datetime.strptime(end_date, '%Y-%m-%d')
+        query = query.filter(Feedback.created_at <= end)
+    feedbacks = query.order_by(Feedback.created_at.desc()).all()
+    categories = Category.query.all()
+
+    rendered = render_template("summary_log_pdf.html",
+                               feedbacks=feedbacks,
+                               categories=categories,
+                               now=datetime.now())
+    pdf_buffer = BytesIO()
+    pisa_status = pisa.CreatePDF(rendered, dest=pdf_buffer, encoding='utf-8')
+    if pisa_status.err:
+        flash("Error generating PDF", "error")
+        return redirect(url_for("summary_log"))
+    pdf_buffer.seek(0)
+    return send_file(pdf_buffer,
+                     mimetype='application/pdf',
+                     as_attachment=True,
+                     download_name=f'summary_log_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf')
 
 @app.route("/update_feedback/<int:fb_id>", methods=["POST"])
 def update_feedback(fb_id):
