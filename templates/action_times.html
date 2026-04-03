@@ -6,6 +6,9 @@
     <title>Complaint Action Times - Staff</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        .break-word { word-break: break-word; white-space: normal; overflow-wrap: break-word; max-width: 300px; }
+    </style>
 </head>
 <body class="bg-gray-100 p-4">
     <div class="max-w-7xl mx-auto bg-white p-6 rounded-xl shadow-lg">
@@ -28,7 +31,7 @@
                 <thead class="bg-gray-100">
                     <tr>
                         <th class="p-2 border">Ref</th>
-                        <th class="p-2 border">Issue (truncated)</th>
+                        <th class="p-2 border">Issue (full text)</th>
                         <th class="p-2 border">Created</th>
                         <th class="p-2 border">Action Taken At</th>
                         <th class="p-2 border">Hours to Action</th>
@@ -40,7 +43,7 @@
                     {% for c in complaints %}
                     <tr class="hover:bg-gray-50">
                         <td class="p-2 border font-mono">{{ c.reference }}</td>
-                        <td class="p-2 border">{{ c.issue_received[:50] }}...</td>
+                        <td class="p-2 border break-word">{{ c.issue_received }}</td>   <!-- full text -->
                         <td class="p-2 border">{{ c.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
                         <td class="p-2 border">
                             {% if c.action_taken_at %}

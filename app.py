@@ -19,11 +19,18 @@ from textblob import TextBlob
 from sqlalchemy import text
 from sqlalchemy.orm import joinedload
 
-# --- Environment Configuration -------------------------------------------------
+# --- Environment Configuration ------------------------------------
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'gweru_secret_key_2026')
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///feedback.db')
+# SQLite with timeout and thread-safe mode to prevent database lock errors
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///feedback.db?timeout=20&check_same_thread=False')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_pre_ping': True,
+    'pool_recycle': 300,
+    'pool_size': 1,
+    'max_overflow': 0
+}
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB
 app.config['BABEL_DEFAULT_LOCALE'] = 'en'
@@ -34,14 +41,14 @@ def create_upload_folder():
 
 create_upload_folder()
 
-# --- Extensions ----------------------------------------------------------------
+# --- Extensions ---------------------------------------------------
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 CORS(app, resources={r"/*": {"origins": "*"}})
 babel = Babel()
 babel.init_app(app, locale_selector=lambda: session.get('lang', request.accept_languages.best_match(['en', 'sn', 'nd'])))
 
-# --- Helper Functions ----------------------------------------------------------
+# --- Helper Functions ---------------------------------------------
 def generate_reference():
     date_part = datetime.now().strftime('%Y%m%d')
     random_part = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
@@ -61,7 +68,7 @@ def parse_datetime(dt_str):
     except ValueError:
         return datetime.strptime(dt_str, '%Y-%m-%d %H:%M:%S')
 
-# --- Admin decorator -----------------------------------------------------------
+# --- Admin decorator ----------------------------------------------
 def admin_required(f):
     from functools import wraps
     @wraps(f)
@@ -72,16 +79,16 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# --- NLTK Data ----------------------------------------------------------------
+# --- NLTK Data ----------------------------------------------------
 import nltk
 try:
     nltk.data.find('tokenizers/punkt')
 except LookupError:
     nltk.download('punkt', quiet=True)
 
-# ------------------------------------------------------------------------------
+# -----------------------------------------------------------------
 # DATABASE MODELS
-# ------------------------------------------------------------------------------
+# -----------------------------------------------------------------
 feedback_categories = db.Table('feedback_categories',
     db.Column('feedback_id', db.Integer, db.ForeignKey('feedback.id'), primary_key=True),
     db.Column('category_id', db.Integer, db.ForeignKey('category.id'), primary_key=True)
@@ -106,7 +113,7 @@ class Category(db.Model):
 class Feedback(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     reference = db.Column(db.String(20), unique=True, nullable=False, default=generate_reference)
-    issue_received = db.Column(db.String(500), nullable=False)
+    issue_received = db.Column(db.Text, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.now)
     type = db.Column(db.String(50), nullable=False)
     mechanism = db.Column(db.String(100), nullable=True)
@@ -166,9 +173,9 @@ class AuditLog(db.Model):
 
     user = db.relationship('User', backref='audit_logs')
 
-# ------------------------------------------------------------------------------
+# -----------------------------------------------------------------
 # AUTHENTICATION ROUTES
-# ------------------------------------------------------------------------------
+# -----------------------------------------------------------------
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
@@ -200,9 +207,9 @@ def require_login():
     if request.endpoint not in public_endpoints and not session.get("logged_in"):
         return redirect(url_for("login"))
 
-# ------------------------------------------------------------------------------
+# -----------------------------------------------------------------
 # PUBLIC ROUTES
-# ------------------------------------------------------------------------------
+# -----------------------------------------------------------------
 @app.route("/")
 def home():
     return render_template("welcome.html")
@@ -278,9 +285,9 @@ def track_feedback():
             flash("No feedback found with that reference and contact info.")
     return render_template("track.html", feedback=feedback)
 
-# ------------------------------------------------------------------------------
+# -----------------------------------------------------------------
 # PROTECTED ROUTES (Staff)
-# ------------------------------------------------------------------------------
+# -----------------------------------------------------------------
 @app.route("/action_times", methods=["GET", "POST"])
 def action_times():
     if request.method == "POST":
@@ -323,7 +330,7 @@ def dashboard_stats():
     recent_list = [{
         'id': f.id,
         'reference': f.reference,
-        'issue': f.issue_received[:50],
+        'issue': f.issue_received,  # full text, no truncation
         'type': f.type,
         'date': f.created_at.strftime('%Y-%m-%d')
     } for f in recent]
@@ -389,7 +396,7 @@ def summary_log():
     keyword = request.args.get('q')
     if keyword:
         query = query.filter(Feedback.issue_received.contains(keyword) |
-                              Feedback.recommendation.contains(keyword))
+                             Feedback.recommendation.contains(keyword))
     start_date = request.args.get('start_date')
     if start_date:
         start = datetime.strptime(start_date, '%Y-%m-%d')
@@ -506,7 +513,6 @@ def analysis():
 
 @app.route("/deep_analysis_data")
 def deep_analysis_data():
-    # (unchanged, keep original)
     month = request.args.get("month", type=int)
     quarter = request.args.get("quarter")
     year = request.args.get("year", type=int)
@@ -636,19 +642,18 @@ def deep_analysis():
 
 @app.route("/deep_trends")
 def deep_trends():
-    # (unchanged, keep original)
     year = request.args.get("year", default=datetime.now().year, type=int)
-    feedback_total_by_month = {m: 0 for m in range(1, 13)}
-    complaint_by_month = {m: {"resolved": 0, "total": 0} for m in range(1, 13)}
-    suggestion_by_month = {m: {"implemented": 0, "total": 0} for m in range(1, 13)}
-    compliment_by_month = {m: {"maintained": 0, "deviated": 0} for m in range(1, 13)}
-    urgent_complaint_by_month = {m: {"resolved": 0, "urgent": 0} for m in range(1, 13)}
-    urgent_suggestion_by_month = {m: {"implemented": 0, "urgent": 0} for m in range(1, 13)}
-    mechanism_by_month = {m: {} for m in range(1, 13)}
-    referral_by_month = {m: 0 for m in range(1, 13)}
-    action_within_48h_by_month = {m: 0 for m in range(1, 13)}
-    action_over_48h_by_month = {m: 0 for m in range(1, 13)}
-    carried_over_by_month = {m: 0 for m in range(1, 13)}
+    feedback_total_by_month = {m: 0 for m in range(1,13)}
+    complaint_by_month = {m: {"resolved": 0, "total": 0} for m in range(1,13)}
+    suggestion_by_month = {m: {"implemented": 0, "total": 0} for m in range(1,13)}
+    compliment_by_month = {m: {"maintained": 0, "deviated": 0} for m in range(1,13)}
+    urgent_complaint_by_month = {m: {"resolved": 0, "urgent": 0} for m in range(1,13)}
+    urgent_suggestion_by_month = {m: {"implemented": 0, "urgent": 0} for m in range(1,13)}
+    mechanism_by_month = {m: {} for m in range(1,13)}
+    referral_by_month = {m: 0 for m in range(1,13)}
+    action_within_48h_by_month = {m: 0 for m in range(1,13)}
+    action_over_48h_by_month = {m: 0 for m in range(1,13)}
+    carried_over_by_month = {m: 0 for m in range(1,13)}
 
     data = Feedback.query.filter(db.extract("year", Feedback.created_at) == year).all()
     for fb in data:
@@ -688,7 +693,7 @@ def deep_trends():
         if mech:
             mechanism_by_month[m][mech] = mechanism_by_month[m].get(mech, 0) + 1
 
-    for m in range(1, 13):
+    for m in range(1,13):
         month_start = datetime(year, m, 1)
         carried_over_by_month[m] = Feedback.query.filter(
             Feedback.type == "complaint",
@@ -716,7 +721,6 @@ def deep_trends():
 
 @app.route("/current_month")
 def current_month():
-    # (unchanged)
     now = datetime.now()
     year = now.year
     month = now.month
@@ -819,9 +823,9 @@ def all_feedback():
         "categories": [c.name for c in fb.categories]
     } for fb in data])
 
-# ------------------------------------------------------------------------------
+# -----------------------------------------------------------------
 # ADMIN-ONLY ROUTES
-# ------------------------------------------------------------------------------
+# -----------------------------------------------------------------
 @app.route('/admin/users', methods=['GET', 'POST'])
 @admin_required
 def admin_users():
@@ -999,7 +1003,7 @@ def admin_restore():
                         if len(row) >= 2:
                             cat = Category(name=row[1])
                             db.session.add(cat)
-                db.session.commit()
+                    db.session.commit()
 
             # Import users
             users_csv = os.path.join(temp_dir, 'users.csv')
@@ -1016,7 +1020,7 @@ def admin_restore():
                                 password_hash=row[3]
                             )
                             db.session.add(user)
-                db.session.commit()
+                    db.session.commit()
 
             # Import feedback
             feedbacks_csv = os.path.join(temp_dir, 'feedback.csv')
@@ -1045,22 +1049,22 @@ def admin_restore():
                                 contact_phone=row[15] if row[15] else None
                             )
                             db.session.add(fb)
-                db.session.commit()
+                    db.session.commit()
 
-                # Assign categories (many-to-many)
-                with open(feedbacks_csv, 'r', encoding='utf-8') as f:
-                    reader = csv.reader(f)
-                    next(reader)
-                    for row in reader:
-                        if len(row) >= 17:
-                            fb_id = int(row[0])
-                            cats_str = row[16]
-                            if cats_str:
-                                fb = Feedback.query.get(fb_id)
-                                if fb:
-                                    cat_names = [c.strip() for c in cats_str.split(',')]
-                                    cats = Category.query.filter(Category.name.in_(cat_names)).all()
-                                    fb.categories = cats
+            # Assign categories (many-to-many)
+            with open(feedbacks_csv, 'r', encoding='utf-8') as f:
+                reader = csv.reader(f)
+                next(reader)
+                for row in reader:
+                    if len(row) >= 17:
+                        fb_id = int(row[0])
+                        cats_str = row[16]
+                        if cats_str:
+                            fb = Feedback.query.get(fb_id)
+                            if fb:
+                                cat_names = [c.strip() for c in cats_str.split(',')]
+                                cats = Category.query.filter(Category.name.in_(cat_names)).all()
+                                fb.categories = cats
                 db.session.commit()
 
             # Import feedback history
@@ -1082,7 +1086,7 @@ def admin_restore():
                                 timestamp=parse_datetime(row[7])
                             )
                             db.session.add(h)
-                db.session.commit()
+                    db.session.commit()
 
             # Import attachments
             attachments_csv = os.path.join(temp_dir, 'attachments.csv')
@@ -1100,7 +1104,7 @@ def admin_restore():
                                 uploaded_at=parse_datetime(row[4])
                             )
                             db.session.add(a)
-                db.session.commit()
+                    db.session.commit()
 
             # Import audit log
             audit_csv = os.path.join(temp_dir, 'audit_log.csv')
@@ -1118,7 +1122,7 @@ def admin_restore():
                                 timestamp=parse_datetime(row[4])
                             )
                             db.session.add(al)
-                db.session.commit()
+                    db.session.commit()
 
             # Restore uploaded files
             uploads_source = os.path.join(temp_dir, 'uploads')
@@ -1128,10 +1132,7 @@ def admin_restore():
                     shutil.rmtree(upload_dest)
                 shutil.copytree(uploads_source, upload_dest)
 
-            # Log restore (before session is cleared)
             log_audit('system_restore', 'System restored from backup')
-
-            # Clear session and force logout
             session.clear()
             flash('System restored successfully. Please log in again with restored credentials.', 'success')
             return redirect(url_for('login'))
@@ -1145,9 +1146,9 @@ def admin_restore():
 
     return render_template('admin_restore.html')
 
-# ------------------------------------------------------------------------------
+# -----------------------------------------------------------------
 # AUDIT LOG VIEW
-# ------------------------------------------------------------------------------
+# -----------------------------------------------------------------
 @app.route('/admin/audit_log')
 @admin_required
 def admin_audit_log():
@@ -1155,8 +1156,9 @@ def admin_audit_log():
     per_page = 50
     logs = AuditLog.query.options(joinedload(AuditLog.user)).order_by(AuditLog.timestamp.desc()).paginate(page=page, per_page=per_page)
     return render_template('admin_audit_log.html', logs=logs)
-# ------------------------------------------------------------------------------
+
+# -----------------------------------------------------------------
 # INITIALIZATION (development only)
-# ------------------------------------------------------------------------------
+# -----------------------------------------------------------------
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", use_reloader=False)

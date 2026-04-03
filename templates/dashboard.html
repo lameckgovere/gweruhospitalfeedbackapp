@@ -1,108 +1,86 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gweru District Health Feedback App - Staff Dashboard</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gweru District Health Feedback App - Staff Dashboard</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  .break-word { word-break: break-word; white-space: normal; overflow-wrap: break-word; max-width: 400px; }
+</style>
 </head>
 <body class="bg-white min-h-screen flex flex-col">
-    <!-- HEADER -->
-    <header class="bg-green-700 text-white p-4 flex justify-between items-center">
-        <h1 class="text-lg font-bold">Gweru District Health Feedback App (Staff)</h1>
-        <a href="/logout" class="text-white hover:underline">Logout</a>
-    </header>
+<!-- HEADER -->
+<header class="bg-green-700 text-white p-4 flex justify-between items-center">
+<h1 class="text-lg font-bold">Gweru District Health Feedback App (Staff)</h1>
+<a href="/logout" class="text-white hover:underline">Logout</a>
+</header>
 
-    <!-- MAIN -->
-    <main class="flex-grow p-6">
-        <h2 class="text-2xl font-semibold mb-6">Dashboard</h2>
+<!-- MAIN -->
+<main class="flex-grow p-6">
+<h2 class="text-2xl font-semibold mb-6">Dashboard</h2>
 
-        <!-- KPI Cards -->
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6" id="kpi-cards">
-            <div class="bg-blue-100 p-4 rounded shadow text-center">
-                <p class="text-sm">Total Feedback</p>
-                <h3 id="total" class="text-2xl font-bold">--</h3>
-            </div>
-            <div class="bg-yellow-100 p-4 rounded shadow text-center">
-                <p class="text-sm">Unresolved</p>
-                <h3 id="unresolved" class="text-2xl font-bold">--</h3>
-            </div>
-            <div class="bg-green-100 p-4 rounded shadow text-center">
-                <p class="text-sm">Resolved</p>
-                <h3 id="resolved" class="text-2xl font-bold">--</h3>
-            </div>
-            <div class="bg-purple-100 p-4 rounded shadow text-center">
-                <p class="text-sm">Implemented</p>
-                <h3 id="implemented" class="text-2xl font-bold">--</h3>
-            </div>
-        </div>
+<!-- KPI Cards -->
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6" id="kpi-cards">
+<div class="bg-blue-100 p-4 rounded shadow text-center"><p class="text-sm">Total Feedback</p><h3 id="total" class="text-2xl font-bold">--</h3></div>
+<div class="bg-yellow-100 p-4 rounded shadow text-center"><p class="text-sm">Unresolved</p><h3 id="unresolved" class="text-2xl font-bold">--</h3></div>
+<div class="bg-green-100 p-4 rounded shadow text-center"><p class="text-sm">Resolved</p><h3 id="resolved" class="text-2xl font-bold">--</h3></div>
+<div class="bg-purple-100 p-4 rounded shadow text-center"><p class="text-sm">Implemented</p><h3 id="implemented" class="text-2xl font-bold">--</h3></div>
+</div>
 
-        <!-- Recent Feedback Table -->
-        <div class="bg-white shadow rounded p-4">
-            <h3 class="text-lg font-semibold mb-2">Recent Feedback</h3>
-            <table class="w-full text-sm">
-                <thead class="bg-gray-200">
-                    <tr>
-                        <th class="p-2 text-left">Reference</th>
-                        <th class="p-2 text-left">Issue</th>
-                        <th class="p-2 text-left">Type</th>
-                        <th class="p-2 text-left">Date</th>
-                    </tr>
-                </thead>
-                <tbody id="recent-table">
-                    <tr><td colspan="4" class="p-2 text-center">Loading...</td></tr>
-                </tbody>
-            </table>
-        </div>
+<!-- Recent Feedback Table -->
+<div class="bg-white shadow rounded p-4">
+<h3 class="text-lg font-semibold mb-2">Recent Feedback</h3>
+<table class="w-full text-sm">
+<thead class="bg-gray-200">
+<tr><th class="p-2 text-left">Reference</th><th class="p-2 text-left">Issue</th><th class="p-2 text-left">Type</th><th class="p-2 text-left">Date</th></tr>
+</thead>
+<tbody id="recent-table"><tr><td colspan="4" class="p-2 text-center">Loading...</td></tr></tbody>
+</table>
+</div>
 
-        <!-- Navigation Grid -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 w-full max-w-3xl mx-auto mt-8">
-            <a href="/submit" class="bg-blue-600 text-white p-4 rounded hover:bg-blue-700 text-center">Submit Feedback (Staff)</a>
-            <a href="/summary_log" class="bg-purple-600 text-white p-4 rounded hover:bg-purple-700 text-center">Summary Log</a>
-            <a href="/analysis" class="bg-green-600 text-white p-4 rounded hover:bg-green-700 text-center">Analysis & Reports</a>
-            <a href="/categories" class="bg-amber-600 text-white p-4 rounded hover:bg-amber-700 text-center">Manage Categories</a>
-            <a href="/action_times" class="bg-teal-600 text-white p-4 rounded hover:bg-teal-700 text-center">Action Times</a>
+<!-- Navigation Grid -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 w-full max-w-3xl mx-auto mt-8">
+<a href="/submit" class="bg-blue-600 text-white p-4 rounded hover:bg-blue-700 text-center">Submit Feedback (Staff)</a>
+<a href="/summary_log" class="bg-purple-600 text-white p-4 rounded hover:bg-purple-700 text-center">Summary Log</a>
+<a href="/analysis" class="bg-green-600 text-white p-4 rounded hover:bg-green-700 text-center">Analysis & Reports</a>
+<a href="/categories" class="bg-amber-600 text-white p-4 rounded hover:bg-amber-700 text-center">Manage Categories</a>
+<a href="/action_times" class="bg-teal-600 text-white p-4 rounded hover:bg-teal-700 text-center">Action Times</a>
+{% if session.role == 'admin' %}
+<a href="/admin/users" class="bg-red-600 text-white p-4 rounded hover:bg-red-700 text-center">User Management</a>
+<a href="/admin/backup" class="bg-green-600 text-white p-4 rounded hover:bg-green-700 text-center">Backup System</a>
+<a href="/admin/restore" class="bg-yellow-600 text-white p-4 rounded hover:bg-yellow-700 text-center">Restore System</a>
+<a href="/admin/audit_log" class="bg-blue-600 text-white p-4 rounded hover:bg-blue-700 text-center">Audit Log</a>
+{% endif %}
+</div>
+</main>
 
-            <!-- Admin-only links -->
-            {% if session.role == 'admin' %}
-                <a href="/admin/users" class="bg-red-600 text-white p-4 rounded hover:bg-red-700 text-center">User Management</a>
-                <a href="/admin/backup" class="bg-green-600 text-white p-4 rounded hover:bg-green-700 text-center">Backup System</a>
-                <a href="/admin/restore" class="bg-yellow-600 text-white p-4 rounded hover:bg-yellow-700 text-center">Restore System</a>
-                <a href="/admin/audit_log" class="bg-blue-600 text-white p-4 rounded hover:bg-blue-700 text-center">Audit Log</a>
-            {% endif %}
-        </div>
-    </main>
+<footer class="bg-gray-800 text-white text-center p-4 text-sm">
+© 2026 Gweru District Health Feedback App<br><span class="text-xs italic">Health Promotion Unit</span>
+</footer>
 
-    <!-- FOOTER -->
-    <footer class="bg-gray-800 text-white text-center p-4 text-sm">
-        © 2026 Gweru District Health Feedback App<br>
-        <span class="text-xs italic">Health Promotion Unit</span>
-    </footer>
+<script>
+async function loadDashboard() {
+  const res = await fetch('/api/dashboard_stats');
+  const data = await res.json();
+  document.getElementById('total').innerText = data.total;
+  document.getElementById('unresolved').innerText = data.unresolved;
+  document.getElementById('resolved').innerText = data.resolved;
+  document.getElementById('implemented').innerText = data.implemented;
 
-    <script>
-        async function loadDashboard() {
-            const res = await fetch('/api/dashboard_stats');
-            const data = await res.json();
-            document.getElementById('total').innerText = data.total;
-            document.getElementById('unresolved').innerText = data.unresolved;
-            document.getElementById('resolved').innerText = data.resolved;
-            document.getElementById('implemented').innerText = data.implemented;
-
-            const tbody = document.getElementById('recent-table');
-            tbody.innerHTML = '';
-            data.recent.forEach(item => {
-                const row = `
-                    <tr>
-                        <td class="p-2 border-b">${item.reference}</td>
-                        <td class="p-2 border-b">${item.issue}</td>
-                        <td class="p-2 border-b">${item.type}</td>
-                        <td class="p-2 border-b">${item.date}</td>
-                    </tr>
-                `;
-                tbody.innerHTML += row;
-            });
-        }
-        loadDashboard();
-    </script>
+  const tbody = document.getElementById('recent-table');
+  tbody.innerHTML = '';
+  data.recent.forEach(item => {
+    const row = `<tr>
+      <td class="p-2 border-b font-mono">${item.reference}</td>
+      <td class="p-2 border-b break-word">${item.issue}</td>
+      <td class="p-2 border-b">${item.type}</td>
+      <td class="p-2 border-b">${item.date}</td>
+    </tr>`;
+    tbody.innerHTML += row;
+  });
+}
+loadDashboard();
+</script>
 </body>
 </html>
